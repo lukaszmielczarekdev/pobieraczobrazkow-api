@@ -10,6 +10,7 @@ const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cors());
+app.use(express.static("public"));
 
 app.get("/", (req, res) => res.send("Pobieracz Obrazków - API :)"));
 

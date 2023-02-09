@@ -1,10 +1,10 @@
 import express from "express";
-import { addImage, getImage, getImages } from "../controllers/Image";
+import { addDownloadToQueue, getImage, getImages } from "../controllers/Image";
 
 const routes = express.Router();
 
 routes.get("/get", getImages);
 routes.get("/get/:id", getImage);
-routes.post("/add", addImage);
+routes.post("/add", addDownloadToQueue);
 
 export default routes;
