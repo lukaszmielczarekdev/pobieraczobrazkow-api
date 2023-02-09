@@ -35,12 +35,23 @@ export const addImage = async (req: Request, res: Response) => {
 };
 
 export const getImages = async (req: Request, res: Response) => {
+  const { page } = req.query;
+  const limit = 5;
+  const skip = (Number(page) - 1) * limit;
+
   try {
-    const images = await Image.find();
+    const images = await Image.find({ ...req.query })
+      .limit(limit)
+      .skip(skip);
 
     if (images.length === 0) return res.status(404).send("Images not found.");
+    const count = await Image.estimatedDocumentCount({});
 
-    res.status(200).json(images);
+    res.status(200).json({
+      images,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+    });
   } catch (error) {
     res.status(500).json({ message: "Something went wrong." });
   }
