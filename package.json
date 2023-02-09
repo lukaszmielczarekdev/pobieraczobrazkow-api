@@ -8,6 +8,11 @@
     "nodemon": "^2.0.20",
     "ts-node": "^10.9.1"
   },
+  "devDependencies": {
+    "@types/cors": "^2.8.13",
+    "@types/express": "^4.17.17",
+    "typescript": "^4.9.5"
+  },
   "name": "pobieraczobrazkow-api",
   "version": "1.0.0",
   "description": "API do pobieracza obrazkow",
@@ -18,10 +23,5 @@
     "start": "node build/server.js"
   },
   "author": "lukasz mielczarek",
-  "license": "ISC",
-  "devDependencies": {
-    "@types/cors": "^2.8.13",
-    "@types/express": "^4.17.17",
-    "typescript": "^4.9.5"
-  }
+  "license": "ISC"
 }

@@ -1,9 +1,8 @@
 import { Request, Response } from "express";
-import Image from "../models/ImageModel";
-import mongoose from "mongoose";
-import { config } from "../config/config";
-
 import axios from "axios";
+import mongoose from "mongoose";
+import Image from "../models/ImageModel";
+import { config } from "../config/config";
 
 export const addImage = async (req: Request, res: Response) => {
   const { sourceUrl, addDate } = req.body;
@@ -13,21 +12,23 @@ export const addImage = async (req: Request, res: Response) => {
       responseType: "arraybuffer",
     });
 
-    let base64 = Buffer.from(raw.data, "binary").toString("base64");
-    let image = `data:${raw.headers["content-type"]};base64,${base64}`;
+    let convertedToBase64 = Buffer.from(raw.data, "binary").toString("base64");
+    let base64Image = `data:${raw.headers["content-type"]};base64,${convertedToBase64}`;
 
     const id = new mongoose.Types.ObjectId();
     const newImage = new Image({
       _id: id,
       sourceUrl,
       addDate,
-      file: image,
-      downloadDate: new Date(),
+      file: base64Image,
+      downloadDate: new Date().toLocaleString("en-GB"),
     });
-
     await newImage.save();
 
-    res.status(201).json({ image: newImage });
+    res.status(201).json({
+      ...newImage.toObject(),
+      databaseUrl: `${config.server.url}/images/get/${newImage._id}`,
+    });
   } catch (error) {
     res.status(500).json({ message: "Something went wrong." });
   }
@@ -52,14 +53,21 @@ export const getImage = async (req: Request, res: Response) => {
     if (!mongoose.Types.ObjectId.isValid(_id))
       return res.status(404).send("Image not found.");
 
-    const image = await Image.findOne({ _id });
+    const image = await Image.findOne({ _id }).select({
+      _id: 0,
+      updatedAt: 0,
+      createdAt: 0,
+    });
 
     if (!image) return res.status(404).json({ message: "Image not found." });
 
-    res.status(200).json({
-      ...image,
-      databaseUrl: `${config.server.url}/images/${image._id}`,
-    });
+    const [fileInfo, fileData] = image.file.split(",");
+    const contentType = fileInfo.split(";")[0].replace("data:", "");
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Length", fileData.length);
+
+    res.send(Buffer.from(fileData, "base64"));
   } catch (error) {
     res.status(500).json({ message: "Something went wrong." });
   }

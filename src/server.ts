@@ -7,8 +7,8 @@ import imageRoutes from "./routes/Images";
 
 const app = express();
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+app.use(express.urlencoded({ extended: true, limit: "15mb" }));
+app.use(express.json({ limit: "15mb" }));
 app.use(cors());
 
 app.get("/", (req, res) => res.send("Pobieracz Obrazków - API :)"));
