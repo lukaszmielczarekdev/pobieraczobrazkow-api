@@ -88,13 +88,10 @@ export const getImage = async (req: Request, res: Response) => {
 
     if (!image) return res.status(404).json({ message: "Image not found." });
 
-    const [fileInfo, fileData] = image.file.split(",");
-    const contentType = fileInfo.split(";")[0].replace("data:", "");
-
-    res.setHeader("Content-Type", contentType);
-    res.setHeader("Content-Length", fileData.length);
-
-    res.send(Buffer.from(fileData, "base64"));
+    res.status(200).json({
+      ...image.toObject(),
+      databaseUrl: `${config.server.url}/images/${image._id}`,
+    });
   } catch (error) {
     res.status(500).json({ message: "Something went wrong." });
   }
