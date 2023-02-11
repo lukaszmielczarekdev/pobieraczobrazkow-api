@@ -1,16 +1,23 @@
 import { Request, Response } from "express";
 import axios, { AxiosError } from "axios";
 import mongoose from "mongoose";
-import Image from "../models/ImageModel";
-import { config } from "../config/config";
 import async from "async";
 import FS from "fs";
 import path from "path";
+import Image from "../models/ImageModel";
+import { config } from "../config/config";
 
-// 3. Pobiera, konwertuje i zapisuje obrazek w bazie danych.
+type Task = {
+  imageUrl: string;
+  imageId: mongoose.Types.ObjectId;
+  addDate: string;
+};
+
+// 3. Pobiera, konwertuje i zapisuje obrazek w `/uploads` oraz w bazie danych.
 const downloadImage = async (
   sourceUrl: string,
-  imageId: mongoose.Types.ObjectId
+  imageId: mongoose.Types.ObjectId,
+  addDate: string
 ) => {
   try {
     const extension = path.extname(sourceUrl);
@@ -18,19 +25,18 @@ const downloadImage = async (
     const response = await axios.get(sourceUrl, {
       responseType: "stream",
     });
-
     await response.data.pipe(
-      FS.createWriteStream(`./public/images/${imageId.toString()}${extension}`)
+      FS.createWriteStream(`./uploads/${imageId.toString()}${extension}`)
     );
 
-    // zapisuje do bazy danych
-    const addDate = new Date().toLocaleString("en-GB");
-    const raw = await axios.get(sourceUrl, {
+    const downloadedImage = await axios.get(sourceUrl, {
       responseType: "arraybuffer",
     });
-
-    let convertedToBase64 = Buffer.from(raw.data, "binary").toString("base64");
-    let base64Image = `data:${raw.headers["content-type"]};base64,${convertedToBase64}`;
+    let convertedToBase64 = Buffer.from(
+      downloadedImage.data,
+      "binary"
+    ).toString("base64");
+    let base64Image = `data:${downloadedImage.headers["content-type"]};base64,${convertedToBase64}`;
 
     const newImage = new Image({
       _id: imageId,
@@ -88,23 +94,20 @@ export const getImage = async (req: Request, res: Response) => {
 
     if (!image) return res.status(404).json({ message: "Image not found." });
 
+    const extension = path.extname(image.sourceUrl);
+
     res.status(200).json({
       ...image.toObject(),
-      databaseUrl: `${config.server.url}/images/${image._id}`,
+      backupUrl: `${config.server.url}/${_id}${extension}`,
     });
   } catch (error) {
     res.status(500).json({ message: "Something went wrong." });
   }
 };
 
-type Task = {
-  imageUrl: string;
-  imageId: mongoose.Types.ObjectId;
-};
-
 // 2. Serwer odpala zadanie z kolejki (w tym przypadku jedno na raz).
 const queue = async.queue(async (task: Task, callback) => {
-  await downloadImage(task.imageUrl, task.imageId);
+  await downloadImage(task.imageUrl, task.imageId, task.addDate);
   callback?.();
 }, 1);
 
@@ -116,18 +119,20 @@ queue.error((error, task) => {
   console.log(error);
 });
 
-// 1. dodaje zadanie pobrania obrazka do kolejki i zwraca url obrazka.
+// 1. dodaje do kolejki zadanie pobrania obrazka i zwraca url obrazka.
 export const addDownloadToQueue = (req: Request, res: Response) => {
   const { sourceUrl } = req.body;
-  // generuje id obrazka, będące również jego nazwą (potrzebne do szukania obrazka w bazie danych)
-  const imageId = new mongoose.Types.ObjectId();
 
+  // generuje id obrazka, będące również jego nazwą (potrzebne do odnalezienia obrazka w bazie danych).
+  const imageId = new mongoose.Types.ObjectId();
   const extension = path.extname(sourceUrl);
+  const addDate = new Date().toLocaleString("en-GB");
 
   try {
-    queue.push({ imageUrl: sourceUrl, imageId });
+    queue.push({ imageUrl: sourceUrl, imageId, addDate });
+
     res.status(201).json({
-      url: `${config.server.url}/images/${imageId.toString()}${extension}`,
+      url: `${config.server.url}/${imageId.toString()}${extension}`,
     });
   } catch (error) {
     res.status(500).json({ message: "Something went wrong." });
