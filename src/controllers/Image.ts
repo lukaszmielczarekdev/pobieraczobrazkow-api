@@ -43,7 +43,10 @@ const downloadImage = async (
       sourceUrl,
       addDate,
       file: base64Image,
-      downloadDate: new Date().toLocaleString("en-GB"),
+      downloadDate: new Date().toLocaleString("en-GB", {
+        dateStyle: "short",
+        timeStyle: "short",
+      }),
     });
 
     await newImage.save();
@@ -126,7 +129,10 @@ export const addDownloadToQueue = (req: Request, res: Response) => {
   // generuje id obrazka, będące również jego nazwą (potrzebne do odnalezienia obrazka w bazie danych).
   const imageId = new mongoose.Types.ObjectId();
   const extension = path.extname(sourceUrl);
-  const addDate = new Date().toLocaleString("en-GB");
+  const addDate = new Date().toLocaleString("en-GB", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
 
   try {
     queue.push({ imageUrl: sourceUrl, imageId, addDate });
