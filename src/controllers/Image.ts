@@ -2,10 +2,7 @@ import { Request, Response } from "express";
 import axios, { AxiosError } from "axios";
 import mongoose from "mongoose";
 import async from "async";
-import FS from "fs";
-import path from "path";
 import Image from "../models/ImageModel";
-import { config } from "../config/config";
 
 type Task = {
   imageUrl: string;
@@ -13,22 +10,13 @@ type Task = {
   addDate: string;
 };
 
-// 3. Pobiera, konwertuje i zapisuje obrazek w `/uploads` oraz w bazie danych.
+// 3. Pobiera, konwertuje i zapisuje obrazek w bazie danych.
 const downloadImage = async (
   sourceUrl: string,
   imageId: mongoose.Types.ObjectId,
   addDate: string
 ) => {
   try {
-    const extension = path.extname(sourceUrl);
-
-    const response = await axios.get(sourceUrl, {
-      responseType: "stream",
-    });
-    await response.data.pipe(
-      FS.createWriteStream(`./uploads/${imageId.toString()}${extension}`)
-    );
-
     const downloadedImage = await axios.get(sourceUrl, {
       responseType: "arraybuffer",
     });
@@ -69,20 +57,11 @@ export const getImages = async (req: Request, res: Response) => {
       .limit(limit)
       .skip(skip);
 
-    const updatedImages = images.map((image) => {
-      return {
-        ...image.toObject(),
-        backupUrl: `${config.server.url}/${image._id}${path.extname(
-          image.sourceUrl
-        )}`,
-      };
-    });
-
     if (images.length === 0) return res.status(404).send("Images not found.");
     const count = await Image.estimatedDocumentCount({});
 
     res.status(200).json({
-      images: updatedImages,
+      images,
       totalPages: Math.ceil(count / limit),
       currentPage: page,
     });
@@ -106,12 +85,7 @@ export const getImage = async (req: Request, res: Response) => {
 
     if (!image) return res.status(404).json({ message: "Image not found." });
 
-    const extension = path.extname(image.sourceUrl);
-
-    res.status(200).json({
-      ...image.toObject(),
-      backupUrl: `${config.server.url}/${_id}${extension}`,
-    });
+    res.status(200).json({ ...image.toObject() });
   } catch (error) {
     res.status(500).json({ message: "Something went wrong." });
   }
@@ -131,13 +105,12 @@ queue.error((error, task) => {
   console.log(error);
 });
 
-// 1. dodaje do kolejki zadanie pobrania obrazka i zwraca url obrazka.
+// 1. dodaje do kolejki zadanie pobrania obrazka i zwraca jego id (na podstawie id generowany jest url).
 export const addDownloadToQueue = (req: Request, res: Response) => {
   const { sourceUrl } = req.body;
 
-  // generuje id obrazka, będące również jego nazwą (potrzebne do odnalezienia obrazka w bazie danych).
+  // generuje id obrazka, będące również jego nazwą.
   const imageId = new mongoose.Types.ObjectId();
-  const extension = path.extname(sourceUrl);
   const addDate = new Date().toLocaleString("en-GB", {
     dateStyle: "short",
     timeStyle: "short",
@@ -145,10 +118,7 @@ export const addDownloadToQueue = (req: Request, res: Response) => {
 
   try {
     queue.push({ imageUrl: sourceUrl, imageId, addDate });
-
-    res.status(201).json({
-      url: `${config.server.url}/${imageId.toString()}${extension}`,
-    });
+    res.status(201).json({ imageId: imageId.toString() });
   } catch (error) {
     res.status(500).json({ message: "Something went wrong." });
   }
