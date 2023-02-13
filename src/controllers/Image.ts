@@ -61,7 +61,7 @@ const downloadImage = async (
 
 export const getImages = async (req: Request, res: Response) => {
   const { page } = req.query;
-  const limit = 4;
+  const limit = 3;
   const skip = (Number(page) - 1) * limit;
 
   try {
