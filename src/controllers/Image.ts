@@ -61,7 +61,7 @@ const downloadImage = async (
 
 export const getImages = async (req: Request, res: Response) => {
   const { page } = req.query;
-  const limit = 5;
+  const limit = 4;
   const skip = (Number(page) - 1) * limit;
 
   try {
@@ -69,11 +69,20 @@ export const getImages = async (req: Request, res: Response) => {
       .limit(limit)
       .skip(skip);
 
+    const updatedImages = images.map((image) => {
+      return {
+        ...image.toObject(),
+        backupUrl: `${config.server.url}/${image._id}${path.extname(
+          image.sourceUrl
+        )}`,
+      };
+    });
+
     if (images.length === 0) return res.status(404).send("Images not found.");
     const count = await Image.estimatedDocumentCount({});
 
     res.status(200).json({
-      images,
+      images: updatedImages,
       totalPages: Math.ceil(count / limit),
       currentPage: page,
     });
