@@ -7,14 +7,14 @@ import Image from "../models/ImageModel";
 type Task = {
   imageUrl: string;
   imageId: mongoose.Types.ObjectId;
-  addDate: string;
+  addDate: Date;
 };
 
 // 3. Pobiera, konwertuje i zapisuje obrazek w bazie danych.
 const downloadImage = async (
   sourceUrl: string,
   imageId: mongoose.Types.ObjectId,
-  addDate: string
+  addDate: Date
 ) => {
   try {
     const downloadedImage = await axios.get(sourceUrl, {
@@ -31,10 +31,7 @@ const downloadImage = async (
       sourceUrl,
       addDate,
       file: base64Image,
-      downloadDate: new Date().toLocaleString("en-GB", {
-        dateStyle: "short",
-        timeStyle: "short",
-      }),
+      downloadDate: new Date(),
     });
 
     await newImage.save();
@@ -111,11 +108,7 @@ export const addDownloadToQueue = (req: Request, res: Response) => {
 
   // generuje id obrazka, będące również jego nazwą.
   const imageId = new mongoose.Types.ObjectId();
-  const addDate = new Date().toLocaleString("en-GB", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-
+  const addDate = new Date();
   try {
     queue.push({ imageUrl: sourceUrl, imageId, addDate });
     res.status(201).json({ imageId: imageId.toString() });
