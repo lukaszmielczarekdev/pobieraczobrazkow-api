@@ -3,14 +3,15 @@ import axios, { AxiosError } from "axios";
 import mongoose from "mongoose";
 import async from "async";
 import Image from "../models/ImageModel";
+import QueueTask from "../models/QueueTaskModel";
 
-type Task = {
+interface Task {
   imageUrl: string;
   imageId: mongoose.Types.ObjectId;
   addDate: Date;
-};
+}
 
-// 3. Pobiera, konwertuje i zapisuje obrazek w bazie danych.
+// 3. Pobiera, konwertuje, zapisuje obrazek w bazie danych i usuwa zadanie z bazy.
 const downloadImage = async (
   sourceUrl: string,
   imageId: mongoose.Types.ObjectId,
@@ -20,6 +21,7 @@ const downloadImage = async (
     const downloadedImage = await axios.get(sourceUrl, {
       responseType: "arraybuffer",
     });
+
     let convertedToBase64 = Buffer.from(
       downloadedImage.data,
       "binary"
@@ -35,9 +37,14 @@ const downloadImage = async (
     });
 
     await newImage.save();
+
+    // po zapisaniu obrazka usuwa zakończone zadanie z bazy danych
+    await QueueTask.findOneAndRemove({ imageId });
   } catch (error: unknown) {
     if (error instanceof AxiosError) {
-      console.log(error.response?.data.message);
+      // jeśli obrazka nie ma pod danym adresem, zadanie jest usuwane z bazy
+      error.code === "ENOTFOUND" &&
+        (await QueueTask.findOneAndRemove({ imageId }));
     } else if (typeof error === "string") {
       console.log(error);
     }
@@ -88,7 +95,9 @@ export const getImage = async (req: Request, res: Response) => {
   }
 };
 
-// 2. Serwer odpala zadanie z kolejki (w tym przypadku jedno na raz).
+// 2. Odpalają się zadania z kolejki (w tym przypadku jedno na raz).
+// Jeśli nastąpi restart to tutaj system sprawdza czy są jakieś zadania w bazie
+// i ewentualnie dodaje je do kolejki.
 const queue = async.queue(async (task: Task, callback) => {
   await downloadImage(task.imageUrl, task.imageId, task.addDate);
   callback?.();
@@ -102,14 +111,40 @@ queue.error((error, task) => {
   console.log(error);
 });
 
-// 1. dodaje do kolejki zadanie pobrania obrazka i zwraca jego id (na podstawie id generowany jest url).
-export const addDownloadToQueue = (req: Request, res: Response) => {
+const checkForTasks = async (queue: async.QueueObject<Task>) => {
+  const queueTasks = await QueueTask.find({});
+  if (queueTasks.length > 0) {
+    queueTasks.map((task) => {
+      task.imageId &&
+        queue.push({
+          imageUrl: task.imageUrl,
+          imageId: new mongoose.Types.ObjectId(task.imageId),
+          addDate: task.addDate,
+        });
+    });
+  }
+};
+checkForTasks(queue);
+
+// 1. dodaje do bazy danych oraz do kolejki zadanie pobrania obrazka i zwraca id obrazka
+// clientowi (na podstawie id client może pobrać później dane obrazka).
+export const addDownloadToQueue = async (req: Request, res: Response) => {
   const { sourceUrl } = req.body;
 
-  // generuje id obrazka, będące również jego nazwą.
-  const imageId = new mongoose.Types.ObjectId();
-  const addDate = new Date();
   try {
+    // -generuje id obrazka, będące również jego nazwą
+    const imageId = new mongoose.Types.ObjectId();
+    const addDate = new Date();
+
+    // -dodaje zadanie do bazy danych (na wypadek restartu)
+    const newQueueTask = new QueueTask({
+      imageUrl: sourceUrl,
+      imageId: imageId.toString(),
+      addDate,
+    });
+    await newQueueTask.save();
+
+    // -dodaje zadanie do kolejki
     queue.push({ imageUrl: sourceUrl, imageId, addDate });
     res.status(201).json({ imageId: imageId.toString() });
   } catch (error) {
